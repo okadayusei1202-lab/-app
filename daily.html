@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>AI家計簿</title>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+font-family:sans-serif;
+background:#eef1f6;
+margin:0;
+}
+
+header{
+background:#3a7bd5;
+color:white;
+padding:18px;
+text-align:center;
+font-size:22px;
+}
+
+.box{
+background:white;
+margin:14px;
+padding:14px;
+border-radius:10px;
+box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
+
+input,select,button{
+width:100%;
+padding:10px;
+margin:6px 0;
+border-radius:6px;
+border:1px solid #ccc;
+font-size:16px;
+}
+
+button{
+background:#3a7bd5;
+color:white;
+border:none;
+}
+
+.item{
+border-bottom:1px solid #ddd;
+padding:10px;
+display:flex;
+justify-content:space-between;
+}
+
+.actions button{
+width:auto;
+margin-left:6px;
+padding:5px 10px;
+}
+
+.delete{background:#d33}
+.edit{background:#f39c12}
+
+img{
+margin-top:5px;
+border-radius:6px;
+}
+
+.candidate{
+padding:6px;
+border-bottom:1px solid #ddd;
+display:flex;
+justify-content:space-between;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>AI家計簿</header>
+
+<div class="box">
+<button onclick="prevMonth()">← 前の月</button>
+<span id="monthLabel"></span>
+<button onclick="nextMonth()">次の月 →</button>
+</div>
+
+
+<div class="box">
+
+<input type="date" id="date">
+<input id="name" placeholder="商品名">
+<input id="price" placeholder="金額">
+
+<select id="category">
+
+<option>食品</option>
+<option>日用品</option>
+<option>医療</option>
+<option>衣料</option>
+<option>美容</option>
+<option>教育</option>
+<option>交通</option>
+<option>ガソリン</option>
+<option>レジャー</option>
+<option>交際</option>
+<option>その他</option>
+
+</select>
+
+<button onclick="add()">追加</button>
+
+</div>
+
+
+<div class="box">
+
+<h3>AIレシート</h3>
+
+<input type="file" accept="image/*" capture="environment" id="camera">
+
+<button onclick="scanReceipt()">AI読み取り</button>
+
+<div id="candidates"></div>
+
+</div>
+
+
+
+
+<div class="box" id="list"></div>
+
+
+<script>
+
+let today=new Date()
+
+let year=today.getFullYear()
+let month=today.getMonth()+1
+
+let key="kakeibo_"+year+"_"+month
+
+let data=JSON.parse(localStorage.getItem(key))||[]
+
+let editIndex=-1
+
+
+function save(){
+localStorage.setItem(key,JSON.stringify(data))
+}
+
+
+function updateMonthLabel(){
+monthLabel.innerText=year+"年 "+month+"月"
+}
+
+
+function prevMonth(){
+
+month--
+
+if(month<1){
+month=12
+year--
+}
+
+reload()
+
+}
+
+function nextMonth(){
+
+month++
+
+if(month>12){
+month=1
+year++
+}
+
+reload()
+
+}
+
+
+function reload(){
+
+key="kakeibo_"+year+"_"+month
+data=JSON.parse(localStorage.getItem(key))||[]
+
+updateMonthLabel()
+draw()
+
+}
+
+
+function autoCategory(name){
+
+name=name.toLowerCase()
+
+if(name.match(/パン|米|弁当|スーパー/)) return "食品"
+if(name.match(/薬|病院/)) return "医療"
+if(name.match(/服|シャツ/)) return "衣料"
+if(name.match(/電車|バス/)) return "交通"
+if(name.match(/ガソリン/)) return "ガソリン"
+
+return "その他"
+
+}
+
+
+
+function add(){
+
+let item={
+date:date.value,
+name:name.value,
+price:price.value,
+category:category.value
+}
+
+if(editIndex==-1){
+data.push(item)
+}else{
+data[editIndex]=item
+editIndex=-1
+}
+
+save()
+draw()
+
+}
+
+
+
+function remove(i){
+data.splice(i,1)
+save()
+draw()
+}
+
+
+
+function edit(i){
+
+let d=data[i]
+
+date.value=d.date
+name.value=d.name
+price.value=d.price
+category.value=d.category
+
+editIndex=i
+
+}
+
+
+
+function draw(){
+
+list.innerHTML=""
+
+data.forEach((d,i)=>{
+
+list.innerHTML+=`
+
+<div class="item">
+
+<div>
+${d.date}<br>
+${d.name}<br>
+¥${d.price} (${d.category})<br>
+${d.image?`<img src="${d.image}" width="80">`:""}
+</div>
+
+<div class="actions">
+<button class="edit" onclick="edit(${i})">編集</button>
+<button class="delete" onclick="remove(${i})">削除</button>
+</div>
+
+</div>
+
+`
+
+})
+
+drawCharts()
+
+}
+
+
+
+
+
+
+
+function drawCharts(){
+
+let totals={}
+
+data.forEach(d=>{
+if(!totals[d.category]) totals[d.category]=0
+totals[d.category]+=Number(d.price)
+})
+
+new Chart(monthChart,{
+type:"pie",
+data:{
+labels:Object.keys(totals),
+datasets:[{data:Object.values(totals)}]
+}
+})
+
+let months=new Array(12).fill(0)
+
+for(let i=1;i<=12;i++){
+
+let k="kakeibo_"+year+"_"+i
+
+let d=JSON.parse(localStorage.getItem(k))||[]
+
+d.forEach(e=>months[i-1]+=Number(e.price))
+
+}
+
+new Chart(yearChart,{
+type:"bar",
+data:{
+labels:["1","2","3","4","5","6","7","8","9","10","11","12"],
+datasets:[{label:"支出",data:months}]
+}
+})
+
+}
+
+
+
+async function scanReceipt(){
+
+let file=camera.files[0]
+
+if(!file){
+alert("画像選択")
+return
+}
+
+let img=new Image()
+
+img.src=URL.createObjectURL(file)
+
+img.onload=async function(){
+
+let canvas=document.createElement("canvas")
+let ctx=canvas.getContext("2d")
+
+canvas.width=img.width
+canvas.height=img.height
+
+ctx.drawImage(img,0,0)
+
+let result=await Tesseract.recognize(canvas,"jpn+eng")
+
+let text=result.data.text
+
+let lines=text.split("\n")
+
+let candidatesList=[]
+
+lines.forEach(l=>{
+
+let m=l.match(/(.+?)\s([0-9]{2,6})$/)
+
+if(m){
+
+let name=m[1].trim()
+let price=parseInt(m[2])
+
+if(price>20 && price<50000){
+
+if(!name.match(/合計|小計|税|釣/)){
+
+candidatesList.push({name,price})
+
+}
+
+}
+
+}
+
+})
+
+showCandidates(candidatesList,file)
+
+}
+
+}
+
+
+
+function showCandidates(items,file){
+
+candidates.innerHTML=""
+
+items.forEach(i=>{
+
+candidates.innerHTML+=`
+
+<div class="candidate">
+
+<div>${i.name} ¥${i.price}</div>
+
+<button onclick="addCandidate('${i.name}',${i.price})">追加</button>
+
+</div>
+
+`
+
+})
+
+}
+
+
+
+function addCandidate(nameVal,priceVal){
+
+data.push({
+
+date:date.value,
+name:nameVal,
+price:priceVal,
+category:autoCategory(nameVal)
+
+})
+
+save()
+draw()
+
+}
+
+
+
+updateMonthLabel()
+draw()
+
+</script>
+
+</body>
+</html>

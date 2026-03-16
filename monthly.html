@@ -1,0 +1,311 @@
+<html>
+
+<head>
+
+<title>月次決算</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+font-family:sans-serif;
+background:#f5f5f5;
+margin:0;
+}
+
+header{
+background:#3a7bd5;
+color:white;
+text-align:center;
+padding:20px;
+font-size:22px;
+}
+
+.box{
+background:white;
+margin:20px;
+padding:20px;
+border-radius:10px;
+box-shadow:0 2px 5px rgba(0,0,0,0.1);
+}
+
+input,select,button{
+width:100%;
+padding:12px;
+margin-top:10px;
+margin-bottom:10px;
+border:1px solid #ccc;
+border-radius:6px;
+font-size:16px;
+box-sizing:border-box;
+}
+
+button{
+background:#3a7bd5;
+color:white;
+border:none;
+cursor:pointer;
+}
+
+button:hover{
+background:#2f62ab;
+}
+
+.big{
+font-size:22px;
+font-weight:bold;
+padding:20px;
+}
+
+</style>
+
+</head>
+
+
+
+<body>
+
+<header>
+月次決算
+</header>
+
+
+
+<div class="box">
+
+<button onclick="changeMonth(-1)">◀ 前の月</button>
+
+<div id="monthTitle"></div>
+
+<button onclick="changeMonth(1)">次の月 ▶</button>
+
+</div>
+
+
+
+<div class="box">
+
+給料
+<input id="salary">
+
+前月繰越
+<input id="carry">
+
+</div>
+
+
+
+<div class="box">
+
+<h3>固定費</h3>
+
+電気代
+<input class="cost">
+
+ガス代
+<input class="cost">
+
+水道代
+<input class="cost">
+
+電話代
+<input class="cost">
+
+携帯代
+<input class="cost">
+
+保険代
+<input class="cost">
+
+家賃
+<input class="cost">
+
+</div>
+
+
+
+<div class="big">
+
+残高  
+<span id="balance">0</span>
+
+</div>
+
+
+
+<h2 style="margin-left:20px">カテゴリ別支出</h2>
+
+<div class="box">
+<canvas id="chart"></canvas>
+</div>
+
+
+
+<script>
+
+
+let today = new Date()
+
+let currentYear = today.getFullYear()
+let currentMonth = today.getMonth()+1
+
+
+
+function getKey(){
+return "kakeibo_daily_" + currentYear + "_" + currentMonth
+}
+
+
+
+function calculate(){
+
+let salary = Number(document.getElementById("salary").value) || 0
+let carry = Number(document.getElementById("carry").value) || 0
+
+let costs = document.querySelectorAll(".cost")
+
+let total = 0
+
+costs.forEach(c=>{
+total += Number(c.value) || 0
+})
+
+
+let daily = JSON.parse(localStorage.getItem(getKey())) || []
+
+daily.forEach(i=>{
+total += Number(i.price)
+})
+
+
+let balance = salary + carry - total
+
+document.getElementById("balance").innerText = balance
+
+saveData()
+
+drawChart()
+
+}
+
+
+
+function saveData(){
+
+let data = {
+
+salary:document.getElementById("salary").value,
+carry:document.getElementById("carry").value
+
+}
+
+localStorage.setItem("kakeibo_monthly",JSON.stringify(data))
+
+}
+
+
+
+function loadData(){
+
+let data = JSON.parse(localStorage.getItem("kakeibo_monthly"))
+
+if(!data)return
+
+document.getElementById("salary").value = data.salary
+document.getElementById("carry").value = data.carry
+
+}
+
+
+
+function changeMonth(num){
+
+currentMonth += num
+
+if(currentMonth < 1){
+currentMonth = 12
+currentYear--
+}
+
+if(currentMonth > 12){
+currentMonth = 1
+currentYear++
+}
+
+document.getElementById("monthTitle").innerText =
+currentYear + "年 " + currentMonth + "月"
+
+calculate()
+
+}
+
+
+
+function drawChart(){
+
+let daily = JSON.parse(localStorage.getItem(getKey())) || []
+
+let categories = {
+
+"食品":0,
+"日用品":0,
+"医療":0,
+"飲料":0,
+"その他":0
+
+}
+
+daily.forEach(i=>{
+
+if(categories[i.category] !== undefined){
+
+categories[i.category] += Number(i.price)
+
+}
+
+})
+
+
+let ctx = document.getElementById("chart")
+
+new Chart(ctx,{
+
+type:"pie",
+
+data:{
+labels:Object.keys(categories),
+datasets:[{
+data:Object.values(categories)
+}]
+}
+
+})
+
+}
+
+
+
+document.querySelectorAll("input").forEach(i=>{
+
+i.addEventListener("input",calculate)
+
+})
+
+
+document.getElementById("monthTitle").innerText =
+currentYear + "年 " + currentMonth + "月"
+
+
+loadData()
+
+calculate()
+
+
+</script>
+
+
+
+</body>
+
+</html>
